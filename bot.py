@@ -13,6 +13,7 @@ from config_data.config import Config, load_config
 import dialogs.dialog as dialog
 from i18n.translator_hub import create_translator_hub
 from middlewares.i18n import TranslatorRunnerMiddleware
+from handlers import user_handlers
 
 # ИСПРАВЛЕНО: Оставляем только async_session
 from database.db import async_session
@@ -42,7 +43,7 @@ async def main():
     translator_hub: TranslatorHub = create_translator_hub()
 
     # Подключаем роутеры
-    dp.include_routers(dialog.start_dialog)
+    dp.include_routers(dialog.start_dialog, user_handlers.user_router)
 
     dp.update.middleware(TranslatorRunnerMiddleware())
 
