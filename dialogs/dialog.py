@@ -5,7 +5,7 @@ from dialogs import getters, states
 
 
 start_dialog = Dialog(
-    Window(Format('start_hi'),
+    Window(Format('{start_bot}'),
         getter=getters.start_hi,
         state=states.StartSG.start)
 )
