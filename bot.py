@@ -42,7 +42,6 @@ async def main():
     translator_hub: TranslatorHub = create_translator_hub()
 
     # Подключаем роутеры
-    dp.include_router()
     dp.include_routers(
 
     )

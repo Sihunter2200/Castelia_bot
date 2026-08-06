@@ -25,7 +25,7 @@ def load_config(path: str | None = None) -> Config:
     return Config(
         tg_bot=Tg_bot(
             token=env('BOT_TOKEN'),
-            superadmin=[int(admin_id) for admin_id in env.list('SUPER_ADMINS')],
+            superadmin=[int(admin_id) for admin_id in env.list('ADMINS')],
         ),
         db=DbConfig(
             # asyncpg для асинхронной работы
