@@ -18,7 +18,7 @@ def create_translator_hub() -> TranslatorHub:
             FluentTranslator(
                 locale='en',
                 translator=FluentBundle.from_files(
-                    locale='en-EN',
+                    locale='en-US',
                     filenames=['locales/en/LC_MESSAGES/txt.ftl']
                 )
             )

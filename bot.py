@@ -10,7 +10,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 
 
 from config_data.config import Config, load_config
-import dialogs as dialog
+import dialogs.dialog as dialog
 from i18n.translator_hub import create_translator_hub
 from middlewares.i18n import TranslatorRunnerMiddleware
 
@@ -42,9 +42,7 @@ async def main():
     translator_hub: TranslatorHub = create_translator_hub()
 
     # Подключаем роутеры
-    dp.include_routers(
-
-    )
+    dp.include_routers(dialog.start_dialog)
 
     dp.update.middleware(TranslatorRunnerMiddleware())
 
