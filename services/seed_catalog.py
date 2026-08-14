@@ -72,8 +72,9 @@ async def seed_catalog():
     variants = collect_variants()
     async with async_session() as session:
         for idx, (name, group) in enumerate(MATERIALS, start=1):
+            ins = pg_insert(Material)
             stmt = (
-                pg_insert(Material)
+                ins
                 .values(
                     name=name,
                     group=group,
@@ -82,8 +83,8 @@ async def seed_catalog():
                 .on_conflict_do_update(
                     index_elements=[Material.name],
                     set_={
-                        'group': stmt.excluded.group,
-                        'menu_photo_path': stmt.excluded.menu_photo_path,
+                        'group': ins.excluded.group,
+                        'menu_photo_path': ins.excluded.menu_photo_path,
                     },
                 )
             )
@@ -95,8 +96,9 @@ async def seed_catalog():
             material = material_result.scalar_one()
 
             for variant in variants.get(idx, []):
+                v_ins = pg_insert(MaterialVariant)
                 v_stmt = (
-                    pg_insert(MaterialVariant)
+                    v_ins
                     .values(
                         material_id=material.id,
                         name_variant=variant['name_variant'],
@@ -105,7 +107,7 @@ async def seed_catalog():
                     .on_conflict_do_update(
                         index_elements=[MaterialVariant.material_id,
                                         MaterialVariant.name_variant],
-                        set_={'photo_path': v_stmt.excluded.photo_path},
+                        set_={'photo_path': v_ins.excluded.photo_path},
                     )
                 )
                 await session.execute(v_stmt)
