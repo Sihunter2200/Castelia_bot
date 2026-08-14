@@ -132,7 +132,7 @@ async def get_task(session: aiohttp.ClientSession, task_id: str) -> dict:
         return await resp.json()
 
 
-async def wait_for_task(session, task_id, attempts=55, delay=5):
+async def wait_for_task(session, task_id, attempts=240, delay=5):
     for i in range(attempts):
         task = await get_task(session, task_id)
         if task['status'] in ('done', 'failed'):
