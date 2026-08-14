@@ -41,7 +41,16 @@ async def download_url(url: str, path: str, headers: dict | None = None):
 
 
 async def send_visualization(bot, chat_id, room_path, material_path, user_id, bg):
-    url, error = await image_api.visualize(room_path, material_path)
+    try:
+        url, error = await image_api.visualize(room_path, material_path)
+    except Exception:
+        logger.exception('Визуализация упала с исключением')
+        await bot.send_message(chat_id, 'Не получилось: internal_error. Попробуй ещё раз')
+        try:
+            await bg.switch_to(states.Photo_visualization.get_user_photo)
+        except Exception:
+            logger.exception('Не удалось вернуть юзера к загрузке фото')
+        return
     if error:
         await bot.send_message(chat_id, f'Не получилось: {error}. Попробуй ещё раз')
         try:

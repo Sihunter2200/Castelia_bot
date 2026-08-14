@@ -1,9 +1,13 @@
 import aiohttp
 import asyncio
+import json
+import logging
 import os
 
 from config_data.config import load_config
 
+
+logger = logging.getLogger(__name__)
 
 _config = load_config()
 API_HEADERS = {'Authorization': _config.gptunnel_api_key}
@@ -19,8 +23,11 @@ async def upload_to_hosting(path: str, session: aiohttp.ClientSession) -> str:
             data=form,
             timeout=aiohttp.ClientTimeout(total=120)
         ) as resp:
-            url = (await resp.text()).strip()
-    return url
+            text = (await resp.text()).strip()
+            logger.info('catbox upload %s: status=%s ответ=%s', path, resp.status, text[:200])
+            if resp.status != 200:
+                raise aiohttp.ClientError(f'catbox status {resp.status}: {text[:200]}')
+    return text
 
 
 async def visualize(room_path: str, material_path: str):
@@ -49,9 +56,12 @@ async def visualize(room_path: str, material_path: str):
             headers=API_HEADERS,
             json=body,
             timeout=aiohttp.ClientTimeout(total=60))
-        data = await resp.json()
+        text = await resp.text()
+        logger.info('gptunnel POST: status=%s url_room=%s url_material=%s', resp.status, url_room, url_material)
+        logger.info('gptunnel POST тело: %s', text[:500])
         if resp.status != 200:
             return (None, 'api_error')
+        data = json.loads(text) if text else {}
         task_id = data['id']
 
         result = await wait_for_task(session, task_id)
