@@ -17,6 +17,8 @@ class DbConfig:
 class Config:
     tg_bot: Tg_bot
     db: DbConfig
+    proxy: str | None
+    gptunnel_api_key: str
 
 def load_config(path: str | None = None) -> Config:
     env = Env()
@@ -35,4 +37,6 @@ def load_config(path: str | None = None) -> Config:
             ),
             is_echo=env.bool('DB_IS_ECHO'),
         ),
+        proxy=env('PROXY', default=None),
+        gptunnel_api_key=env('GPTUNNEL_API_KEY'),
     )

@@ -10,6 +10,8 @@ from alembic import context
 from database.db import Base
 from config_data.config import load_config
 
+from database import models
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config_data = load_config()
