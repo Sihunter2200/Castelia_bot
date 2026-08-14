@@ -88,7 +88,7 @@ async def main():
     dp.update.middleware(TranslatorRunnerMiddleware())
 
     # Глобальная обработка ошибок: не даём ронять поллинг
-    @dp.errors.register(ErrorEvent)
+    @dp.errors()
     async def on_update_error(event: ErrorEvent):
         logger.exception('Ошибка при обработке апдейта: %s', event.exception)
 
