@@ -30,7 +30,7 @@ async def material_selection(dialog_manager: DialogManager,
 
     photo = MediaAttachment(
 		type=ContentType.PHOTO,
-		path=menu_photo if menu_photo else None
+		path=menu_photo or 'data/images/castelia_start_photo.jpg'
 	)
 
     return {'materials': [{'id': m.id, 'name': m.name} for m in materials],

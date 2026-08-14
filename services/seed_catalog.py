@@ -79,7 +79,13 @@ async def seed_catalog():
                     group=group,
                     menu_photo_path=GROUP_PHOTOS[group],
                 )
-                .on_conflict_do_nothing(index_elements=[Material.name])
+                .on_conflict_do_update(
+                    index_elements=[Material.name],
+                    set_={
+                        'group': stmt.excluded.group,
+                        'menu_photo_path': stmt.excluded.menu_photo_path,
+                    },
+                )
             )
             await session.execute(stmt)
 
@@ -96,9 +102,10 @@ async def seed_catalog():
                         name_variant=variant['name_variant'],
                         photo_path=variant['photo_path'],
                     )
-                    .on_conflict_do_nothing(
+                    .on_conflict_do_update(
                         index_elements=[MaterialVariant.material_id,
                                         MaterialVariant.name_variant],
+                        set_={'photo_path': v_stmt.excluded.photo_path},
                     )
                 )
                 await session.execute(v_stmt)
