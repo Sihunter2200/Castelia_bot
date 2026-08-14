@@ -5,6 +5,7 @@ import time
 
 from aiogram import Dispatcher, Bot
 from aiogram.enums import ParseMode
+from aiogram.types import ErrorEvent
 from aiogram.client.default import DefaultBotProperties
 from aiogram_dialog import setup_dialogs
 from fluentogram import TranslatorHub
@@ -87,9 +88,9 @@ async def main():
     dp.update.middleware(TranslatorRunnerMiddleware())
 
     # Глобальная обработка ошибок: не даём ронять поллинг
-    @dp.errors.register()
-    async def on_update_error(update, error, **kwargs):
-        logger.exception('Ошибка при обработке апдейта: %s', error)
+    @dp.errors.register(ErrorEvent)
+    async def on_update_error(event: ErrorEvent):
+        logger.exception('Ошибка при обработке апдейта: %s', event.exception)
 
     # Важно: setup_dialogs всегда в конце, после регистрации всех роутеров
     setup_dialogs(dp, message_manager=RetryMessageManager())
