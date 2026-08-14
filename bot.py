@@ -86,6 +86,11 @@ async def main():
 
     dp.update.middleware(TranslatorRunnerMiddleware())
 
+    # Глобальная обработка ошибок: не даём ронять поллинг
+    @dp.errors.register()
+    async def on_update_error(update, error, **kwargs):
+        logger.exception('Ошибка при обработке апдейта: %s', error)
+
     # Важно: setup_dialogs всегда в конце, после регистрации всех роутеров
     setup_dialogs(dp, message_manager=RetryMessageManager())
 
