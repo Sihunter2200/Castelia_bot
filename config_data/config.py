@@ -19,6 +19,7 @@ class Config:
     db: DbConfig
     proxy: str | None
     gptunnel_api_key: str
+    imgbb_api_key: str | None
 
 def load_config(path: str | None = None) -> Config:
     env = Env()
@@ -39,4 +40,5 @@ def load_config(path: str | None = None) -> Config:
         ),
         proxy=env('PROXY', default=None),
         gptunnel_api_key=env('GPTUNNEL_API_KEY'),
+        imgbb_api_key=env('IMGBB_API_KEY', default=None),
     )

@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -11,6 +12,24 @@ logger = logging.getLogger(__name__)
 
 _config = load_config()
 API_HEADERS = {'Authorization': _config.gptunnel_api_key}
+
+
+async def upload_imgbb(path: str, session: aiohttp.ClientSession) -> str:
+    if not _config.imgbb_api_key:
+        raise aiohttp.ClientError('imgbb: ключ не задан в .env')
+    with open(path, 'rb') as f:
+        b64 = base64.b64encode(f.read()).decode('utf-8')
+    form = aiohttp.FormData()
+    form.add_field('image', b64)
+    async with session.post(
+        f'https://api.imgbb.com/1/upload?key={_config.imgbb_api_key}',
+        data=form,
+        timeout=aiohttp.ClientTimeout(total=120),
+    ) as resp:
+        d = await resp.json()
+    if resp.status != 200 or not d.get('success') or not d.get('data', {}).get('url'):
+        raise aiohttp.ClientError(f'imgbb status {resp.status}: {d}')
+    return d['data']['url']
 
 
 async def upload_catbox(path: str, session: aiohttp.ClientSession) -> str:
@@ -62,6 +81,7 @@ async def upload_graph(path: str, session: aiohttp.ClientSession) -> str:
 
 
 UPLOADERS = [
+    ('imgbb', upload_imgbb),
     ('catbox', upload_catbox),
     ('tmpfiles', upload_tmpfiles),
     ('graph', upload_graph),
