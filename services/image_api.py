@@ -14,7 +14,7 @@ _config = load_config()
 API_HEADERS = {'Authorization': _config.gptunnel_api_key}
 
 
-async def upload_imgbb(path: str, session: aiohttp.ClientSession) -> str:
+async def upload_imgbb(path: str, session: aiohttp.ClientSession, proxy: str | None = None) -> str:
     if not _config.imgbb_api_key:
         raise aiohttp.ClientError('imgbb: ключ не задан в .env')
     with open(path, 'rb') as f:
@@ -24,6 +24,7 @@ async def upload_imgbb(path: str, session: aiohttp.ClientSession) -> str:
     async with session.post(
         f'https://api.imgbb.com/1/upload?key={_config.imgbb_api_key}',
         data=form,
+        proxy=proxy,
         timeout=aiohttp.ClientTimeout(total=120),
     ) as resp:
         d = await resp.json()
@@ -81,18 +82,18 @@ async def upload_graph(path: str, session: aiohttp.ClientSession) -> str:
 
 
 UPLOADERS = [
-    ('imgbb', upload_imgbb),
-    ('catbox', upload_catbox),
-    ('tmpfiles', upload_tmpfiles),
-    ('graph', upload_graph),
+    ('imgbb', upload_imgbb, True),
+    ('catbox', upload_catbox, False),
+    ('tmpfiles', upload_tmpfiles, False),
+    ('graph', upload_graph, False),
 ]
 
 
-async def upload_to_hosting(path: str, session: aiohttp.ClientSession) -> str:
+async def upload_to_hosting(path: str, session: aiohttp.ClientSession, proxy: str | None = None) -> str:
     last_error = None
-    for host, uploader in UPLOADERS:
+    for host, uploader, use_proxy in UPLOADERS:
         try:
-            url = await uploader(path, session)
+            url = await uploader(path, session, proxy=proxy if use_proxy else None)
             logger.info('upload OK via %s: %s -> %s', host, path, url)
             return url
         except Exception as e:
@@ -104,8 +105,8 @@ async def upload_to_hosting(path: str, session: aiohttp.ClientSession) -> str:
 async def visualize(room_path: str, material_path: str):
     async with aiohttp.ClientSession() as session:
         results = await asyncio.gather(
-            upload_to_hosting(room_path, session),
-            upload_to_hosting(material_path, session),
+            upload_to_hosting(room_path, session, _config.upload_proxy),
+            upload_to_hosting(material_path, session, _config.upload_proxy),
             return_exceptions=True
         )
 
