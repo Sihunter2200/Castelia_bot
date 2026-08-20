@@ -11,56 +11,88 @@ from database.models import Material, MaterialVariant
 IMAGES_DIR = 'data/images'
 
 # служебные фото, которые не являются вариантами материалов
-SERVICE_PHOTOS = {'castelia_start_photo.jpg', 'menu_group_1.jpg', 'menu_group_2.jpg', 'menu_group_3.jpg'}
+SERVICE_PHOTOS = {'castelia_start_photo.jpg', 'menu_group_1.jpeg', 'menu_group_2.jpeg', 'menu_group_3.jpeg'}
 
 # group -> путь к общему фото группы
 GROUP_PHOTOS = {
-    1: 'data/images/menu_group_1.jpg',
-    2: 'data/images/menu_group_2.jpg',
-    3: 'data/images/menu_group_3.jpg',
+    1: 'data/images/menu_group_1.jpeg',
+    2: 'data/images/menu_group_2.jpeg',
+    3: 'data/images/menu_group_3.jpeg',
 }
 
-# (имя, группа) — порядок задаёт номер материала в имени файла (_1.._21)
+# (имя, группа) — порядок задаёт только порядок показа в меню,
+# номер материала в имени файла берётся из MATERIAL_FILE_NUMS
 MATERIALS = [
-    ('Alluminium board', 1),
-    ('Ancient wood', 1),
-    ('Crood wood ripple board', 1),
-    ('Line Sone', 1),
+    ('Travertine Italian', 1),
+    ('Travertine PRO', 1),
+    ('Polished stone PRO', 1),
     ('Marble', 1),
-    ('New Rock', 1),
     ('Polished Concrete', 1),
-    ('Polished stone PRO', 2),
-    ('Polywood', 2),
+    ('Slate', 1),
+    ('Round line stone', 1),
+    ('Roman pillar', 2),
     ('Ripple Board', 2),
     ('Ripple board под покраску «выпуклый»', 2),
-    ('Rockface Stone', 2),
-    ('Roman pillar', 2),
     ('Rough surface', 2),
-    ('Round line stone', 3),
+    ('Polywood', 2),
+    ('Terrazo', 2),
+    ('Line Stone', 2),
+    ('New Rock', 3),
+    ('Alluminium board', 3),
+    ('Ancient wood', 3),
+    ('Crood wood ripple board', 3),
+    ('Rockface Stone', 3),
     ('Rust board', 3),
     ('Sandstone Nile', 3),
-    ('Slate', 3),
-    ('Terrazo', 3),
-    ('Travertine Italian', 3),
-    ('Travertine PRO', 3),
 ]
 
+# материал -> номер в имени файла (_1.._21); не зависит от порядка в MATERIALS
+MATERIAL_FILE_NUMS = {
+    'Alluminium board': 1,
+    'Ancient wood': 2,
+    'Crood wood ripple board': 3,
+    'Line Stone': 4,
+    'Marble': 5,
+    'New Rock': 6,
+    'Polished Concrete': 7,
+    'Polished stone PRO': 8,
+    'Polywood': 9,
+    'Ripple Board': 10,
+    'Ripple board под покраску «выпуклый»': 11,
+    'Rockface Stone': 12,
+    'Roman pillar': 13,
+    'Rough surface': 14,
+    'Round line stone': 15,
+    'Rust board': 16,
+    'Sandstone Nile': 17,
+    'Slate': 18,
+    'Terrazo': 19,
+    'Travertine Italian': 20,
+    'Travertine PRO': 21,
+}
+
 _FILE_RE = re.compile(r'^(?P<name>.+)_(?P<num>\d+)\.(?P<ext>[a-zA-Z]+)$')
+
+# служебные файлы, которые не являются вариантами материалов
+_SKIP_PREFIXES = ('color_grid_', 'material_color_', 'layout_photo_', 'menu_layout_')
 
 
 def collect_variants() -> dict[int, list[dict]]:
     """Сканирует data/images и группирует файлы по номеру материала."""
     variants: dict[int, list[dict]] = {}
     for filename in sorted(os.listdir(IMAGES_DIR)):
-        if filename in SERVICE_PHOTOS:
+        full = os.path.join(IMAGES_DIR, filename)
+        if not os.path.isfile(full):
+            continue
+        if filename in SERVICE_PHOTOS or filename.startswith(_SKIP_PREFIXES):
             continue
         m = _FILE_RE.match(filename)
         if not m:
             print(f'Пропущен файл без номера материала: {filename}')
             continue
         num = int(m.group('num'))
-        if not 1 <= num <= len(MATERIALS):
-            print(f'Пропущен файл с несуществующим номером материала: {filename}')
+        if num not in MATERIAL_FILE_NUMS.values():
+            print(f'Пропущен файл с неизвестным номером материала: {filename}')
             continue
         name_variant = m.group('name').strip()
         path = f'{IMAGES_DIR}/{filename}'
@@ -71,7 +103,11 @@ def collect_variants() -> dict[int, list[dict]]:
 async def seed_catalog():
     variants = collect_variants()
     async with async_session() as session:
-        for idx, (name, group) in enumerate(MATERIALS, start=1):
+        for name, group in MATERIALS:
+            num = MATERIAL_FILE_NUMS[name]
+            color_path = f'{IMAGES_DIR}/material_color_{num}.jpg'
+            if not os.path.exists(color_path):
+                color_path = None
             ins = pg_insert(Material)
             stmt = (
                 ins
@@ -79,12 +115,14 @@ async def seed_catalog():
                     name=name,
                     group=group,
                     menu_photo_path=GROUP_PHOTOS[group],
+                    color_photo_path=color_path
                 )
                 .on_conflict_do_update(
                     index_elements=[Material.name],
                     set_={
                         'group': ins.excluded.group,
                         'menu_photo_path': ins.excluded.menu_photo_path,
+                        'color_photo_path': ins.excluded.color_photo_path
                     },
                 )
             )
@@ -95,7 +133,7 @@ async def seed_catalog():
             )
             material = material_result.scalar_one()
 
-            for variant in variants.get(idx, []):
+            for variant in variants.get(num, []):
                 v_ins = pg_insert(MaterialVariant)
                 v_stmt = (
                     v_ins

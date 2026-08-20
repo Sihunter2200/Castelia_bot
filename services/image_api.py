@@ -102,23 +102,24 @@ async def upload_to_hosting(path: str, session: aiohttp.ClientSession, proxy: st
     raise aiohttp.ClientError(f'все хостинги недоступны: {last_error}')
 
 
-async def visualize(room_path: str, material_path: str):
+async def visualize(room_path: str, material_path: str, size_tile: str, photo_layout: str, layout_prompt: str):
     async with aiohttp.ClientSession() as session:
         results = await asyncio.gather(
             upload_to_hosting(room_path, session, _config.upload_proxy),
             upload_to_hosting(material_path, session, _config.upload_proxy),
+            upload_to_hosting(photo_layout, session, _config.upload_proxy),
             return_exceptions=True
         )
 
-        url_room, url_material = results[0], results[1]
+        url_room, url_material, url_layout = results[0], results[1], results[2]
 
-        if isinstance(url_room, Exception) or isinstance(url_material, Exception):
+        if isinstance(url_room, Exception) or isinstance(url_material, Exception) or isinstance(url_layout, Exception):
             return (None, 'upload_failed')
 
         body = {
             "model": "nano-banana-2",
-            "prompt": "The first image is a photo of a room. Replace the wall covering in the first image with exactly the material shown in the second image. Keep the room's lighting, shadows, perspective and furniture. Make the material look realistic and seamless.",
-            "inputs": {"image_input": [url_room, url_material]},
+            "prompt": f"The first image is a photo of a room. Replace the wall covering in the first image with exactly the material shown in the second image, using tiles of size {size_tile} mm. Arrange the tiles according to the {layout_prompt} layout shown in the third image. Keep the room's lighting, shadows, perspective and furniture. Make the material look realistic and seamless.",
+            "inputs": {"image_input": [url_room, url_material, url_layout]},
             "params": {"aspect_ratio": "1:1"},
             "wait": False
         }
@@ -153,7 +154,7 @@ async def get_task(session: aiohttp.ClientSession, task_id: str) -> dict:
         return await resp.json()
 
 
-async def wait_for_task(session, task_id, attempts=720, delay=5):
+async def wait_for_task(session, task_id, attempts=50, delay=5):
     last_status = None
     for i in range(attempts):
         task = await get_task(session, task_id)

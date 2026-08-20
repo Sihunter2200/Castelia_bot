@@ -83,7 +83,7 @@ async def main():
     dp.workflow_data['session_maker'] = async_session
 
     # Подключаем роутеры
-    dp.include_routers(user_handlers.user_router, dialog.start_dialog, dialog.select_collection, dialog.get_photo_user)
+    dp.include_routers(user_handlers.user_router, dialog.start_dialog, dialog.select_collection, dialog.get_photo_user, dialog.forming_cards)
 
     dp.update.middleware(TranslatorRunnerMiddleware())
 

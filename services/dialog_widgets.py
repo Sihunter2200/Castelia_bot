@@ -1,9 +1,9 @@
 import asyncio
 import logging
-import os
+
 import aiohttp
 
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
+from aiogram.types import Message, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog import DialogManager
 from fluentogram import TranslatorRunner
@@ -12,23 +12,10 @@ from dialogs import states
 from services import image_api
 from database import requests
 from database.db import async_session
+from services.layouts import LAYOUTS
 
 
 logger = logging.getLogger(__name__)
-
-
-lead_cache: dict[int, dict] = {}
-
-
-def remove_file(path: str | None):
-    if not path:
-        return
-    try:
-        os.remove(path)
-    except FileNotFoundError:
-        pass
-    except OSError:
-        logger.exception('Не удалось удалить файл %s', path)
 
 
 async def download_url(url: str, path: str, headers: dict | None = None):
@@ -40,9 +27,11 @@ async def download_url(url: str, path: str, headers: dict | None = None):
         f.write(data)
 
 
-async def send_visualization(bot, chat_id, room_path, material_path, user_id, bg):
+async def send_visualization(bot, chat_id, room_path, material_path, user_id, bg, try_another, leave_request, state, size_tile, type_layout):
+    photo_layout=LAYOUTS[type_layout]['photo']
+    layout_prompt=LAYOUTS[type_layout]['prompt']
     try:
-        url, error = await image_api.visualize(room_path, material_path)
+        url, error = await image_api.visualize(room_path, material_path, size_tile, photo_layout, layout_prompt)
     except Exception:
         logger.exception('Визуализация упала с исключением')
         await bot.send_message(chat_id, 'Не получилось: internal_error. Попробуй ещё раз')
@@ -61,29 +50,20 @@ async def send_visualization(bot, chat_id, room_path, material_path, user_id, bg
 
     result_path = f'data/uploads/result_{user_id}.jpg'
     try:
-        await download_url(url, result_path, headers=image_api.API_HEADERS)
+        await download_url(url, result_path, headers=image_api.API_HEADERS) # pyright: ignore[reportArgumentType]
     except Exception:
         result_path = None
         logger.exception('Не удалось скачать результат визуализации')
 
     try:
-        async with async_session() as session:
-            await requests.set_lead_result(session, user_id, result_path, url)
+        await state.update_data(result_url=url, result_path=result_path)
     except Exception:
-        logger.exception('Не удалось обновить результат заявки в БД')
-
-    if user_id in lead_cache:
-        lead_cache[user_id]['result_path'] = result_path
-        lead_cache[user_id]['result_url'] = url
+        logger.exception('Не удалось сохранить результат в FSM data')
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text='Примерить другую коллекцию', callback_data='try_another')],
-        [InlineKeyboardButton(text='Оставить заявку / Запросить расчёт', callback_data='leave_request')],
+        [InlineKeyboardButton(text=try_another, callback_data='try_another')],
+        [InlineKeyboardButton(text=leave_request, callback_data='leave_request')]
     ])
-    try:
-        await bg.done()
-    except Exception:
-        logger.exception('Не удалось закрыть диалог после визуализации')
     try:
         if result_path:
             await bot.send_photo(chat_id, FSInputFile(result_path), reply_markup=keyboard)
@@ -93,51 +73,39 @@ async def send_visualization(bot, chat_id, room_path, material_path, user_id, bg
         logger.exception('Не удалось отправить результат визуализации')
         await bot.send_message(chat_id, 'Не получилось показать результат. Попробуй ещё раз')
 
+    try:
+        await bg.done()
+    except Exception:
+        logger.exception('Не удалось закрыть диалог после визуализации')
+
+
 
 async def save_photo(message: Message, widget: MessageInput, dialog_manager: DialogManager):
-    print('DEBUG dialog_data:', dialog_manager.dialog_data)
     i18n = dialog_manager.middleware_data['i18n']
 
-    user_id = message.from_user.id # type: ignore
-    photo = message.photo[-1] # type: ignore
+    user_id = message.from_user.id  # type: ignore
+    photo = message.photo[-1]  # type: ignore
     path_user = f'data/uploads/{user_id}.jpg'
-    remove_file(lead_cache.get(user_id, {}).get('result_path'))
-    await message.bot.download(photo, destination=path_user)
+    await message.bot.download(photo, destination=path_user) # type: ignore
 
-    dialog_manager.dialog_data['user_photo_path'] = path_user
-    color_id = dialog_manager.start_data.get('color_id')
+    color_id = dialog_manager.start_data.get('color_id') # type: ignore
     if color_id is None:
         await message.answer(i18n.stop.choice.material())
         return
 
     async with async_session() as session:
         path_mat = await requests.get_photo_by_color_id(session, int(color_id))
-        material_name, color_name = await requests.get_material_and_variant_names(session, int(color_id))
+        material_name, color_name = await requests.get_material_and_variant_names(session, int(color_id)) # type: ignore
 
-    lead_cache[user_id] = {
-        'material_id': dialog_manager.start_data.get('material_id'),
-        'color_id': color_id,
-        'username': message.from_user.username,
-        'user_photo_path': path_user,
-        'material_name': material_name,
-        'color_name': color_name,
-    }
+    size_tile=dialog_manager.start_data.get('size_tile')
+    type_layout=dialog_manager.start_data.get('type_layout')
 
-    try:
-        async with async_session() as session:
-            await requests.add_lead(
-                session,
-                telegram_id=user_id,
-                username=message.from_user.username,
-                material_name=material_name,
-                color_name=color_name,
-                user_photo_path=path_user,
-            )
-        logger.info('Заявка сохранена в БД: user_id=%s, material=%s, color=%s', user_id, material_name, color_name)
-    except Exception:
-        logger.exception('Не удалось сохранить заявку в БД для user_id=%s', user_id)
+    state = dialog_manager.middleware_data['state']
+    await state.update_data(material_id=dialog_manager.start_data.get('material_id'), color_id=color_id, material_name=material_name, \
+                            color_name=color_name, user_photo_path=path_user, username=message.from_user.username, size_tile=size_tile,\
+                            type_layout=type_layout)
 
     bg = dialog_manager.bg(user_id=user_id, chat_id=message.chat.id)
-    asyncio.create_task(send_visualization(message.bot, message.chat.id, path_user, path_mat, user_id, bg))
+    asyncio.create_task(send_visualization(message.bot, message.chat.id, path_user, path_mat, user_id, bg, i18n.to.choice.material(), i18n.leave.request(), state, size_tile, type_layout))
 
     await dialog_manager.switch_to(state=states.Photo_visualization.processing_visualization)

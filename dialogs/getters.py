@@ -4,7 +4,6 @@ from aiogram import html
 from fluentogram import TranslatorRunner
 from aiogram.enums import ContentType
 from aiogram_dialog.api.entities import MediaAttachment
-from aiogram.enums import ContentType
 
 from database.db import async_session
 from database import requests
@@ -45,14 +44,29 @@ async def select_color_gett(dialog_manager: DialogManager,
     material_id = dialog_manager.dialog_data.get('material_id') # type: ignore
     if material_id is None:
         return {'choice_color': i18n.choice.color(),
-            'name_color': []}
+            'name_color': [],
+            'choice_color_back': i18n.choice.color.back()}
     material_id = int(material_id)
 
     async with async_session() as session:
         name_color = await requests.get_name_by_id_material(session, material_id)
+        color_path = await requests.get_path_color_by_material_id(session, material_id)
+
+    photo = MediaAttachment(type=ContentType.PHOTO,
+                            path=color_path)
 
     return {'choice_color': i18n.choice.color(),
-            'name_color': name_color}
+            'name_color': name_color,
+            'choice_color_back': i18n.choice.color.back(),
+            'photo': photo}
+
+async def layout_tile_gett(dialog_manager: DialogManager,
+                                i18n: TranslatorRunner,
+                                **kwargs):
+    photo = MediaAttachment(type=ContentType.PHOTO, path='data/images/menu_layout_photo.jpg')
+
+    return {'choice_layout_tile': i18n.choice.layout.tile(),
+            'photo': photo}
 
 
 async def select_photo_by_color_id(dialog_manager: DialogManager,
@@ -73,6 +87,15 @@ async def select_photo_by_color_id(dialog_manager: DialogManager,
             'choice_color_back': i18n.choice.color.back()}
 
 
+async def size_tile_gett(dialog_manager: DialogManager,
+                        i18n: TranslatorRunner,
+                        **kwargs):
+    return {'choice_size_tile': i18n.choice.size.tile(),
+            'size_big': i18n.size.big(),
+            'size_average': i18n.size.average(),
+            'size_small' : i18n.size.small()}
+
+
 async def photo_reception(dialog_manager: DialogManager,
                             i18n: TranslatorRunner,
                             **kwargs):
@@ -84,3 +107,11 @@ async def photo_in_process(dialog_manager: DialogManager,
                             i18n: TranslatorRunner,
                             **kwargs):
     return {'process_visual': i18n.process.visual()}
+
+
+async def user_phone(dialog_manager: DialogManager,
+                        i18n: TranslatorRunner,
+                        **kwargs):
+
+    return {'ask_phone': i18n.ask.phone(),
+            'share_phone': i18n.share.phone()}

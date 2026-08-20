@@ -40,12 +40,19 @@ async def get_photo_by_group(session: AsyncSession, group: int):
 
 
 async def get_name_by_id_material(session: AsyncSession, material_id: int):
-
     stmt = select(models.MaterialVariant.name_variant, models.MaterialVariant.id).where(models.MaterialVariant.material_id == material_id)
 
     result = await session.execute(stmt)
 
     return [{'id': row.id, 'name': row.name_variant} for row in result]
+
+
+async def get_path_color_by_material_id(session: AsyncSession, material_id):
+    stmt = select(models.Material.color_photo_path).where(models.Material.id == material_id)
+
+    result = await session.execute(stmt)
+
+    return result.scalar()
 
 
 async def get_photo_by_color_id(session: AsyncSession, color_id: int):
@@ -66,42 +73,3 @@ async def get_material_and_variant_names(session: AsyncSession, color_id: int):
     result = await session.execute(stmt)
 
     return result.first()
-
-
-async def add_lead(session: AsyncSession, telegram_id: int, username: str | None,
-                   material_name: str | None, color_name: str | None,
-                   result_path: str | None = None, result_url: str | None = None,
-                   user_photo_path: str | None = None):
-    lead = models.Lead(
-        telegram_id=telegram_id,
-        username=username,
-        material_name=material_name,
-        color_name=color_name,
-        result_path=result_path,
-        result_url=result_url,
-        user_photo_path=user_photo_path,
-    )
-    session.add(lead)
-    await session.commit()
-    await session.refresh(lead)
-    return lead
-
-
-async def get_last_lead(session: AsyncSession, telegram_id: int) -> models.Lead | None:
-    stmt = (
-        select(models.Lead)
-        .where(models.Lead.telegram_id == telegram_id)
-        .order_by(models.Lead.created_at.desc(), models.Lead.id.desc())
-        .limit(1)
-    )
-    result = await session.execute(stmt)
-    return result.scalar()
-
-
-async def set_lead_result(session: AsyncSession, telegram_id: int, result_path: str | None, result_url: str | None):
-    lead = await get_last_lead(session, telegram_id)
-    if lead is None:
-        return
-    lead.result_path = result_path
-    lead.result_url = result_url
-    await session.commit()
