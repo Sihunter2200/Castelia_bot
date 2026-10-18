@@ -18,11 +18,16 @@ from services.layouts import LAYOUTS
 logger = logging.getLogger(__name__)
 
 
-async def download_url(url: str, path: str, headers: dict | None = None):
+async def download_url(url: str, path: str):
     async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
             resp.raise_for_status()
+            content_type = resp.headers.get('Content-Type', '').split(';', 1)[0].lower()
+            if not content_type.startswith('image/'):
+                raise aiohttp.ClientError(f'ожидалось изображение, получен Content-Type: {content_type or "не указан"}')
             data = await resp.read()
+    if not data:
+        raise aiohttp.ClientError('получен пустой файл результата')
     with open(path, 'wb') as f:
         f.write(data)
 
@@ -50,7 +55,7 @@ async def send_visualization(bot, chat_id, room_path, material_path, user_id, bg
 
     result_path = f'data/uploads/result_{user_id}.jpg'
     try:
-        await download_url(url, result_path, headers=image_api.API_HEADERS) # pyright: ignore[reportArgumentType]
+        await download_url(url, result_path)
     except Exception:
         result_path = None
         logger.exception('Не удалось скачать результат визуализации')
@@ -65,10 +70,9 @@ async def send_visualization(bot, chat_id, room_path, material_path, user_id, bg
         [InlineKeyboardButton(text=leave_request, callback_data='leave_request')]
     ])
     try:
-        if result_path:
-            await bot.send_photo(chat_id, FSInputFile(result_path), reply_markup=keyboard)
-        else:
-            await bot.send_photo(chat_id, url, reply_markup=keyboard)
+        if result_path is None:
+            raise RuntimeError('файл результата не был скачан')
+        await bot.send_photo(chat_id, FSInputFile(result_path), reply_markup=keyboard)
     except Exception:
         logger.exception('Не удалось отправить результат визуализации')
         await bot.send_message(chat_id, 'Не получилось показать результат. Попробуй ещё раз')
@@ -97,8 +101,8 @@ async def save_photo(message: Message, widget: MessageInput, dialog_manager: Dia
         path_mat = await requests.get_photo_by_color_id(session, int(color_id))
         material_name, color_name = await requests.get_material_and_variant_names(session, int(color_id)) # type: ignore
 
-    size_tile=dialog_manager.start_data.get('size_tile')
-    type_layout=dialog_manager.start_data.get('type_layout')
+    size_tile=dialog_manager.start_data.get('size_tile') # type: ignore
+    type_layout=dialog_manager.start_data.get('type_layout') # type: ignore
 
     state = dialog_manager.middleware_data['state']
     await state.update_data(material_id=dialog_manager.start_data.get('material_id'), color_id=color_id, material_name=material_name, \

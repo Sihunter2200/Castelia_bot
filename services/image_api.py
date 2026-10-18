@@ -10,19 +10,19 @@ from config_data.config import load_config
 
 logger = logging.getLogger(__name__)
 
-_config = load_config()
-API_HEADERS = {'Authorization': _config.gptunnel_api_key}
+config = load_config()
+API_HEADERS = {'Authorization': config.gptunnel_api_key}
 
 
 async def upload_imgbb(path: str, session: aiohttp.ClientSession, proxy: str | None = None) -> str:
-    if not _config.imgbb_api_key:
+    if not config.imgbb_api_key:
         raise aiohttp.ClientError('imgbb: ключ не задан в .env')
     with open(path, 'rb') as f:
         b64 = base64.b64encode(f.read()).decode('utf-8')
     form = aiohttp.FormData()
     form.add_field('image', b64)
     async with session.post(
-        f'https://api.imgbb.com/1/upload?key={_config.imgbb_api_key}',
+        f'https://api.imgbb.com/1/upload?key={config.imgbb_api_key}',
         data=form,
         proxy=proxy,
         timeout=aiohttp.ClientTimeout(total=120),
@@ -93,7 +93,10 @@ async def upload_to_hosting(path: str, session: aiohttp.ClientSession, proxy: st
     last_error = None
     for host, uploader, use_proxy in UPLOADERS:
         try:
-            url = await uploader(path, session, proxy=proxy if use_proxy else None)
+            if use_proxy:
+                url = await uploader(path, session, proxy)
+            else:
+                url = await uploader(path, session)
             logger.info('upload OK via %s: %s -> %s', host, path, url)
             return url
         except Exception as e:
@@ -105,9 +108,9 @@ async def upload_to_hosting(path: str, session: aiohttp.ClientSession, proxy: st
 async def visualize(room_path: str, material_path: str, size_tile: str, photo_layout: str, layout_prompt: str):
     async with aiohttp.ClientSession() as session:
         results = await asyncio.gather(
-            upload_to_hosting(room_path, session, _config.upload_proxy),
-            upload_to_hosting(material_path, session, _config.upload_proxy),
-            upload_to_hosting(photo_layout, session, _config.upload_proxy),
+            upload_to_hosting(room_path, session, config.upload_proxy),
+            upload_to_hosting(material_path, session, config.upload_proxy),
+            upload_to_hosting(photo_layout, session, config.upload_proxy),
             return_exceptions=True
         )
 
@@ -120,7 +123,7 @@ async def visualize(room_path: str, material_path: str, size_tile: str, photo_la
             "model": "nano-banana-2",
             "prompt": f"The first image is a photo of a room. Replace the wall covering in the first image with exactly the material shown in the second image, using tiles of size {size_tile} mm. Arrange the tiles according to the {layout_prompt} layout shown in the third image. Keep the room's lighting, shadows, perspective and furniture. Make the material look realistic and seamless.",
             "inputs": {"image_input": [url_room, url_material, url_layout]},
-            "params": {"aspect_ratio": "1:1"},
+            "params": {"aspect_ratio": "1:1", "output_format": "jpg"},
             "wait": False
         }
 
@@ -130,6 +133,7 @@ async def visualize(room_path: str, material_path: str, size_tile: str, photo_la
             json=body,
             timeout=aiohttp.ClientTimeout(total=60))
         text = await resp.text()
+
         logger.info('gptunnel POST: status=%s url_room=%s url_material=%s', resp.status, url_room, url_material)
         logger.info('gptunnel POST тело: %s', text[:500])
         if resp.status != 200:
