@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 
 async def download_url(url: str, path: str):
     async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+        async with session.get(
+            url,
+            proxy=image_api.config.proxy,
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as resp:
             resp.raise_for_status()
             content_type = resp.headers.get('Content-Type', '').split(';', 1)[0].lower()
             if not content_type.startswith('image/'):
