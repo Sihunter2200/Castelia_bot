@@ -131,6 +131,7 @@ async def visualize(room_path: str, material_path: str, size_tile: str, photo_la
             url='https://gptunnel.ru/api/v2/media/tasks',
             headers=API_HEADERS,
             json=body,
+            proxy=config.proxy,
             timeout=aiohttp.ClientTimeout(total=60))
         text = await resp.text()
 
@@ -153,8 +154,10 @@ async def get_task(session: aiohttp.ClientSession, task_id: str) -> dict:
     async with session.get(
         f'https://gptunnel.ru/api/v2/media/tasks/{task_id}',
         headers=API_HEADERS,
+        proxy=config.proxy,
         timeout=aiohttp.ClientTimeout(total=60)
     ) as resp:
+        resp.raise_for_status()
         return await resp.json()
 
 
