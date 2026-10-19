@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 
 
 async def download_url(url: str, path: str):
-    async with aiohttp.ClientSession() as session:
+    proxy = image_api.config.proxy
+    async with aiohttp.ClientSession(connector=image_api.proxy_connector(proxy)) as session:
         async with session.get(
             url,
-            proxy=image_api.config.proxy,
+            **image_api.proxy_request_options(proxy),
             timeout=aiohttp.ClientTimeout(total=60),
         ) as resp:
             resp.raise_for_status()

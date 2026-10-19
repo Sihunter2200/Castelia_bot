@@ -5,6 +5,8 @@ import json
 import logging
 import os
 
+from aiohttp_socks import ProxyConnector
+
 from config_data.config import load_config
 
 
@@ -12,6 +14,20 @@ logger = logging.getLogger(__name__)
 
 config = load_config()
 API_HEADERS = {'Authorization': config.gptunnel_api_key}
+
+
+def is_socks_proxy(proxy: str | None) -> bool:
+    return bool(proxy and proxy.lower().startswith(('socks4://', 'socks5://')))
+
+
+def proxy_connector(proxy: str | None) -> ProxyConnector | None:
+    return ProxyConnector.from_url(proxy) if is_socks_proxy(proxy) else None
+
+
+def proxy_request_options(proxy: str | None) -> dict:
+    if proxy and not is_socks_proxy(proxy):
+        return {'proxy': proxy}
+    return {}
 
 
 async def upload_imgbb(path: str, session: aiohttp.ClientSession, proxy: str | None = None) -> str:
@@ -106,11 +122,14 @@ async def upload_to_hosting(path: str, session: aiohttp.ClientSession, proxy: st
 
 
 async def visualize(room_path: str, material_path: str, size_tile: str, photo_layout: str, layout_prompt: str):
-    async with aiohttp.ClientSession() as session:
+    async with (
+        aiohttp.ClientSession() as upload_session,
+        aiohttp.ClientSession(connector=proxy_connector(config.proxy)) as gptunnel_session,
+    ):
         results = await asyncio.gather(
-            upload_to_hosting(room_path, session, config.upload_proxy),
-            upload_to_hosting(material_path, session, config.upload_proxy),
-            upload_to_hosting(photo_layout, session, config.upload_proxy),
+            upload_to_hosting(room_path, upload_session, config.upload_proxy),
+            upload_to_hosting(material_path, upload_session, config.upload_proxy),
+            upload_to_hosting(photo_layout, upload_session, config.upload_proxy),
             return_exceptions=True
         )
 
@@ -127,11 +146,11 @@ async def visualize(room_path: str, material_path: str, size_tile: str, photo_la
             "wait": False
         }
 
-        resp = await session.post(
+        resp = await gptunnel_session.post(
             url='https://gptunnel.ru/api/v2/media/tasks',
             headers=API_HEADERS,
             json=body,
-            proxy=config.proxy,
+            **proxy_request_options(config.proxy),
             timeout=aiohttp.ClientTimeout(total=60))
         text = await resp.text()
 
@@ -142,7 +161,7 @@ async def visualize(room_path: str, material_path: str, size_tile: str, photo_la
         data = json.loads(text) if text else {}
         task_id = data['id']
 
-        result = await wait_for_task(session, task_id)
+        result = await wait_for_task(gptunnel_session, task_id)
 
         if result is None or result['status'] == 'failed':
             return (None, 'visualization_failed')
@@ -154,7 +173,7 @@ async def get_task(session: aiohttp.ClientSession, task_id: str) -> dict:
     async with session.get(
         f'https://gptunnel.ru/api/v2/media/tasks/{task_id}',
         headers=API_HEADERS,
-        proxy=config.proxy,
+        **proxy_request_options(config.proxy),
         timeout=aiohttp.ClientTimeout(total=60)
     ) as resp:
         resp.raise_for_status()
